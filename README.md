@@ -20,7 +20,9 @@ https://mirrors.edge.kernel.org/pub/linux/kernel/v6.x/linux-6.8.tar.xz
 Extract the file above, and download the following patch files to the kernel folder:
 
 https://github.com/BenBenIshay/TRC-Telemetry-kernel/commit/4a06c1378c268e1a7047f0ad3a380eecd1b5e228.patch
+
 https://github.com/BenBenIshay/TRC-Telemetry-kernel/commit/05e623c38521a5f5e7ab9dc753683c7f806ba7ad.patch
+
 https://github.com/BenBenIshay/TRC-Telemetry-kernel/commit/baf2fe9455a1e3bef5270b97c16f776d200d816b.patch
 
 Apply the patch - perform the following for each of the three files:
