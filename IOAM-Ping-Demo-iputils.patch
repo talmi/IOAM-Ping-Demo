@@ -1,0 +1,160 @@
+diff --git a/ping/ping.c b/ping/ping.c
+index d0803fe..426a63d 100644
+--- a/ping/ping.c
++++ b/ping/ping.c
+@@ -363,7 +363,7 @@ main(int argc, char **argv)
+ 		hints.ai_family = AF_INET6;
+ 
+ 	/* Parse command line options */
+-	while ((ch = getopt(argc, argv, "h?" "4bRT:" "6F:N:" "aABc:CdDe:fHi:I:l:Lm:M:nOp:qQ:rs:S:t:UvVw:W:")) != EOF) {
++	while ((ch = getopt(argc, argv, "h?" "4bRT:" "6F:N:kK" "aABc:CdDe:fHi:I:l:Lm:M:nOp:qQ:rs:S:t:UvVw:W:")) != EOF) {
+ 		switch(ch) {
+ 		/* IPv4 specific options */
+ 		case '4':
+@@ -411,6 +411,12 @@ main(int argc, char **argv)
+ 				usage();
+ 			hints.ai_socktype = SOCK_RAW;
+ 			break;
++		case 'k':
++			rts.opt_loopback = 1;
++			break;
++		case 'K':
++			rts.opt_ioamloopback = 1;
++			break;
+ 		/* Common options */
+ 		case 'a':
+ 			rts.opt_audible = 1;
+diff --git a/ping/ping.h b/ping/ping.h
+index 9adb346..43c2446 100644
+--- a/ping/ping.h
++++ b/ping/ping.h
+@@ -254,7 +254,9 @@ struct ping_rts {
+ 		opt_timestamp:1,
+ 		opt_ttl:1,
+ 		opt_verbose:1,
+-		opt_connect_sk:1;
++		opt_connect_sk:1,
++		opt_loopback:1,
++		opt_ioamloopback:1;
+ };
+ /* FIXME: global_rts will be removed in future */
+ extern struct ping_rts *global_rts;
+diff --git a/ping/ping6_common.c b/ping/ping6_common.c
+index eb3b0d2..f051593 100644
+--- a/ping/ping6_common.c
++++ b/ping/ping6_common.c
+@@ -85,6 +85,9 @@ ping_func_set_st ping6_func_set = {
+ # define SCOPE_DELIMITER '%'
+ #endif
+ 
++#define ICMP6_LOOP_ECHO_REQUEST 200
++#define ICMP6_LOOP_ECHO_REPLY 201
++
+ int ntohsp(uint16_t *p)
+ {
+ 	uint16_t v;
+@@ -341,8 +344,12 @@ int ping6_run(struct ping_rts *rts, int argc, char **argv, struct addrinfo *ai,
+ 
+ 		if (niquery_is_enabled(&rts->ni))
+ 			ICMP6_FILTER_SETPASS(IPUTILS_NI_ICMP6_REPLY, &filter);
+-		else
+-			ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &filter);
++		else {
++			if (rts->opt_loopback == 0)
++				ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &filter);
++			else
++				ICMP6_FILTER_SETPASS(ICMP6_LOOP_ECHO_REPLY, &filter);
++		}
+ 
+ 		err = setsockopt(sock->fd, IPPROTO_ICMPV6, ICMP6_FILTER, &filter, sizeof filter);
+ 
+@@ -479,6 +486,12 @@ int print_icmp(uint8_t type, uint8_t code, uint32_t info)
+ 	case ICMP6_ECHO_REPLY:
+ 		printf(_("Echo reply"));
+ 		break;
++	case ICMP6_LOOP_ECHO_REQUEST:
++		printf(_("Loop echo request"));
++		break;
++	case ICMP6_LOOP_ECHO_REPLY:
++		printf(_("Loop echo reply"));
++		break;
+ 	case MLD_LISTENER_QUERY:
+ 		printf(_("MLD Query"));
+ 		break;
+@@ -594,7 +607,10 @@ int build_echo(struct ping_rts *rts, uint8_t *_icmph,
+ 	int cc;
+ 
+ 	icmph = (struct icmp6_hdr *)_icmph;
+-	icmph->icmp6_type = ICMP6_ECHO_REQUEST;
++	if (rts->opt_loopback == 0)
++		icmph->icmp6_type = ICMP6_ECHO_REQUEST;
++	else
++		icmph->icmp6_type = ICMP6_LOOP_ECHO_REQUEST;
+ 	icmph->icmp6_code = 0;
+ 	icmph->icmp6_cksum = 0;
+ 	icmph->icmp6_seq = htons(rts->ntransmitted + 1);
+@@ -856,7 +872,7 @@ int ping6_parse_reply(struct ping_rts *rts, socket_st *sock,
+ 		return 1;
+ 	}
+ 
+-	if (icmph->icmp6_type == ICMP6_ECHO_REPLY) {
++	if (icmph->icmp6_type == ICMP6_ECHO_REPLY || icmph->icmp6_type == ICMP6_LOOP_ECHO_REPLY) {
+ 		if (!is_ours(rts, sock, icmph->icmp6_id))
+ 			return 1;
+ 
+@@ -959,6 +975,11 @@ void ping6_install_filter(struct ping_rts *rts, socket_st *sock)
+ 	/* Patch bpflet for current identifier. */
+ 	insns[1] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, htons(rts->ident), 0, 1);
+ 
++	if (rts->opt_loopback == 1)
++		/* Patch bpflet according to opcode */
++		insns[4] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, ICMP6_LOOP_ECHO_REPLY, 1, 0); /* Loop echo? */
++
++
+ 	if (setsockopt(sock->fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter, sizeof(filter)))
+ 		error(0, errno, _("WARNING: failed to install socket filter"));
+ }
+diff --git a/ping/ping_common.c b/ping/ping_common.c
+index 256e67a..6317cc9 100644
+--- a/ping/ping_common.c
++++ b/ping/ping_common.c
+@@ -745,7 +745,7 @@ int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
+ 	if (!csfailed)
+ 		acknowledge(rts, seq);
+ 
+-	if (rts->timing && cc >= (int)(8 + sizeof(struct timeval))) {
++	if (rts->timing && cc >= (int)(8 + sizeof(struct timeval)) && rts->opt_loopback != 1) {
+ 		struct timeval tmp_tv;
+ 		memcpy(&tmp_tv, ptr, sizeof(tmp_tv));
+ 
+@@ -843,7 +843,7 @@ restamp:
+ 		cp = ((unsigned char *)ptr) + sizeof(struct timeval);
+ 		dp = &rts->outpack[8 + sizeof(struct timeval)];
+ 		for (i = sizeof(struct timeval); i < rts->datalen; ++i, ++cp, ++dp) {
+-			if (*cp != *dp) {
++			if (*cp != *dp && rts->opt_loopback != 1) {
+ 				printf(_("\nwrong data byte #%zu should be 0x%x but was 0x%x"),
+ 				       i, *dp, *cp);
+ 				cp = (unsigned char *)ptr + sizeof(struct timeval);
+@@ -854,6 +854,21 @@ restamp:
+ 				}
+ 				break;
+ 			}
++			else if (rts->opt_ioamloopback == 1) {
++                                cp = (unsigned char *)ptr;
++				printf(" IOAM: NodeID=%d,HopLim=%d NodeID=%d,HopLim=%d",cp[63],cp[60],cp[59],cp[56]);
++                                break;
++			}
++			else if (rts->opt_loopback == 1) {
++				printf("\nLoopback ICMP payload:");
++                                cp = (unsigned char *)ptr;
++                                for (i = 0; i < rts->datalen; ++i, ++cp) {
++                                        if ((i % 16) == 0)
++                                                printf("\n#%zu\t", i);
++                                        printf("%02x ", *cp);
++                                }
++                                break;
++			}
+ 		}
+ 	}
+ 	return 0;
