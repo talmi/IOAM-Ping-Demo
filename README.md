@@ -38,12 +38,9 @@ https://phoenixnap.com/kb/build-linux-kernel
 
 Get the latest iputils code:
 
-```
-git clone https://github.com/iputils/iputils
-cd iputils
-```
+https://github.com/iputils/iputils
 
-download the iputils patch file from this repository: 
+Download the iputils patch file for IOAM from this repository: 
 
 https://github.com/talmi/IOAM-Ping-Demo/blob/main/IOAM-Ping-Demo-iputils.patch
 
