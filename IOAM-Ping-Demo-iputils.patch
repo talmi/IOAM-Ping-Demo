@@ -115,19 +115,29 @@ index eb3b0d2..f051593 100644
  		error(0, errno, _("WARNING: failed to install socket filter"));
  }
 diff --git a/ping/ping_common.c b/ping/ping_common.c
-index 256e67a..6317cc9 100644
+index 256e67a..251fa5e 100644
 --- a/ping/ping_common.c
 +++ b/ping/ping_common.c
-@@ -745,7 +745,7 @@ int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
+@@ -740,6 +740,9 @@ int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
+ 	int dupflag = 0;
+ 	long triptime = 0;
+ 	uint8_t *ptr = icmph + icmplen;
++	uint8_t *tsptr = ptr + 88;
++	if (rts->opt_loopback != 1)
++		tsptr = ptr;
+ 
+ 	++rts->nreceived;
  	if (!csfailed)
- 		acknowledge(rts, seq);
+@@ -747,7 +750,7 @@ int gather_statistics(struct ping_rts *rts, uint8_t *icmph, int icmplen,
  
--	if (rts->timing && cc >= (int)(8 + sizeof(struct timeval))) {
-+	if (rts->timing && cc >= (int)(8 + sizeof(struct timeval)) && rts->opt_loopback != 1) {
+ 	if (rts->timing && cc >= (int)(8 + sizeof(struct timeval))) {
  		struct timeval tmp_tv;
- 		memcpy(&tmp_tv, ptr, sizeof(tmp_tv));
+-		memcpy(&tmp_tv, ptr, sizeof(tmp_tv));
++		memcpy(&tmp_tv, tsptr, sizeof(tmp_tv));
  
-@@ -843,7 +843,7 @@ restamp:
+ restamp:
+ 		tvsub(tv, &tmp_tv);
+@@ -843,7 +846,7 @@ restamp:
  		cp = ((unsigned char *)ptr) + sizeof(struct timeval);
  		dp = &rts->outpack[8 + sizeof(struct timeval)];
  		for (i = sizeof(struct timeval); i < rts->datalen; ++i, ++cp, ++dp) {
@@ -136,13 +146,17 @@ index 256e67a..6317cc9 100644
  				printf(_("\nwrong data byte #%zu should be 0x%x but was 0x%x"),
  				       i, *dp, *cp);
  				cp = (unsigned char *)ptr + sizeof(struct timeval);
-@@ -854,6 +854,21 @@ restamp:
+@@ -854,6 +857,25 @@ restamp:
  				}
  				break;
  			}
 +			else if (rts->opt_ioamloopback == 1) {
 +                                cp = (unsigned char *)ptr;
-+				printf(" IOAM: NodeID=%d,HopLim=%d NodeID=%d,HopLim=%d",cp[63],cp[60],cp[59],cp[56]);
++				uint32_t timesec, timefrac;
++				timesec = ((uint32_t)cp[60]<<24)|((uint32_t)cp[61]<<16)|((uint32_t)cp[62]<<8)|((uint32_t)cp[63]);
++				timefrac = ((uint32_t)cp[64]<<24)|((uint32_t)cp[65]<<16)|((uint32_t)cp[66]<<8)|((uint32_t)cp[67]);
++				timefrac = (uint32_t)( timefrac / 1000);
++				printf(" IOAM: NodeID=%d,HopLim=%d,RcvTime=NA NodeID=%d,HopLim=%d,RcvTime=%d.%d",cp[71],cp[68],cp[59],cp[56],timesec,timefrac);
 +                                break;
 +			}
 +			else if (rts->opt_loopback == 1) {

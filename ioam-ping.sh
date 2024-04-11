@@ -220,7 +220,7 @@ setup()
   #TODO if you want to modify the IOAM trace-type below...
   # ... or the pre-allocated size...
   ip -netns ioam_node_alpha route add db01::/64 encap ioam6 mode inline \
-         trace prealloc type 0x800000 ns 123 size 8 dev veth0
+         trace prealloc type 0xB00000 ns 123 size 24 dev veth0
          #trace prealloc type 0xfff002 ns 123 size 244 dev veth0
 }
 
