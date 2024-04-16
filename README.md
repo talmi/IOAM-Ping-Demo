@@ -1,11 +1,26 @@
 # IOAM-Ping-Demo
 
 ## Overview
-This demo presents a simple utility that sends a Ping request using ICMP Loopback messages between two network namespaces: Alpha sends a request to Beta and receives a reply. The request includes IOAM data (RFC 9197) that is encapsulated in an IPv6 option (RFC 9486). The demo presents, beyond the conventional Ping information, also the IOAM data that was collected.
+This demo presents a simple utility that sends a Ping request using ICMPv6 Loopback messages between two network namespaces: Alpha sends a request to Beta and receives a reply. The request includes IOAM data (RFC 9197) that is encapsulated in an IPv6 option (RFC 9486). The demo presents, beyond the conventional Ping information, also the IOAM data that was collected.
 
-The messages exchanged between Alpha and Beta are ICMP Loopback request and reply messages, based on the following Internet draft:
+The messages exchanged between Alpha and Beta are ICMPv6 Loopback request and reply messages, based on the following Internet draft:
 
 https://datatracker.ietf.org/doc/draft-mcb-6man-icmpv6-loopback/
+
+The following diagram illustrates the two nodes. Alpha is the IOAM encapsulating node and Beta is the IOAM decapsulating node. Alpha sends ICMPv6 Loopback requests to Beta, and each request incorporates the IOAM Pre-allocated Trace Option. IOAM data is incorporated into the Trace Option by both Alpha and Beta. When Beta receives an ICMPv6 Loopback request it generates an ICMPv6 Loopback reply, in which the payload incorporates the ICMPv6 Loopback request including its IPv6 header, IPv6 options (with the IOAM data) and the payload. When the Loopback reply reaches Alpha it is parsed and the IOAM data that was collected in the Loopback request is printed and presented to the user.
+```
+           +---------------------+           +---------------------+
+           |                     |           |                     |
+           |     Alpha netns     |           |     Beta netns      |
+           |                     |           |                     |
+           |   +-------------+   |           |   +-------------+   |
+           |   |    veth0    |   |           |   |    veth0    |   |
+           |   |  db01::2/64 | . | . . . . . | . |  db01::1/64 |   |
+           |   +-------------+   |           |   +-------------+   |
+           |                     |           |                     |
+           +---------------------+           +---------------------+
+```
+
 
 This demo is just a proof of concept for experimentation purposes and should not be run in a real network.
 
@@ -26,13 +41,14 @@ Apply the patch:
 git apply icmpv6-loopback.patch 
 ```
 
-Proceed with making and installing the kernel, e.g., by following the instructions on:
+Proceed with making* and installing the kernel, e.g., by following the instructions on:
 https://phoenixnap.com/kb/build-linux-kernel
- 
+
+*Note: "CONFIG_IPV6_IOAM6_LWTUNNEL" must be enabled before compiling (e.g., with "make menuconfig") in order to be able to add the Pre-allocated Trace Option-Type to packets.
 
 ## Patching iputils
 
-Get the latest iputils code:
+Get the iputils code:
 
 https://github.com/iputils/iputils
 
@@ -49,7 +65,7 @@ git apply IOAM-Ping-Demo-iputils.patch
 Make and install iputils according to the README.md file in the iputils repository.
 
 ## Installing iproute2
-In order to make sure that IOAM is supported, install the iproute2 from:
+In order to make sure that IOAM is supported, install iproute2. The iproute2 version should match the kernel version you installed. For example:
 
 https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-6.8.0.tar.xz
 
@@ -62,7 +78,7 @@ Run the script:
 sudo ./ioam-ping.sh
 ```
 
-The script sends 5 ICMP Loopback messages with IOAM and prints the result. It also captures a pcap file.
+The script sends 5 ICMPv6 Loopback messages with IOAM and prints the result. It also captures a pcap file.
 If everything runs smoothly, you should see something like:
 
 ```
