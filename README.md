@@ -62,7 +62,7 @@ Run the script:
 sudo ./ioam-ping.sh
 ```
 
-The sends 5 ICMP messages and prints the result. It also captures a pcap file.
+The script sends 5 ICMP Loopback messages with IOAM and prints the result. It also captures a pcap file.
 If everything runs smoothly, you should see something like:
 
 ```
